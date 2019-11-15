@@ -1,4 +1,8 @@
 # code file
 checker
+go.mod
 
 *.txt
+
+.vscode/*
+
