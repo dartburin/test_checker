@@ -2,8 +2,7 @@ package main
 
 import (
     "fmt"
-    "os"
-    "strconv"
+    "flag"
     "time"
     "net/http"
 )
@@ -37,48 +36,15 @@ func main() {
     stat := Statistics{}
     startTime := time.Now()
 
-    args := os.Args[1:]  //!< Get argument list
-    cntArgs := len(args) //!< Count of arguments
-    timeout := 0
+    var domain string
+    flag.StringVar(&domain, "domain", "http://", "a domain name")
 
-	if cntArgs < 2 { 
-        /** 
-         Obligatory arguments not present
-         It is error of arguments
-         */
-		fmt.Println("Error: bad arguments")
-		fmt.Println("    checker <domain name> <count of checks> [timeout (ms)]")
-		fmt.Println("")
-		os.Exit(100)
-	} else if cntArgs >= 3 { 
-        /**
-         Check not obligatory argument
-         */
-        strTimeout := args[2]
-        num, err := strconv.Atoi(strTimeout)
+    var cntRepeat int
+    flag.IntVar(&cntRepeat, "cnt", 4, "repeat requests count")
 
-        if err == nil {
-            timeout = num
-        } else {
-            fmt.Println("Warning: bad [timeout (ms)] argument. Ignored.")
-            fmt.Println("")
-        }
-	}
-
-    strCntRepeat := args[1] //!< Count repeat argument
-    cntRepeat, err := strconv.Atoi(strCntRepeat)
-    /**
-     Check count repeat argument
-     */
-    if err != nil { 
-		fmt.Println("Error: bad <count of checks> argument")
-		fmt.Println("    checker <domain name> <count of checks> [timeout]")
-		fmt.Println("")
-		os.Exit(100)
-    }
-
-
-    domain := args[0] //!< Url argument
+    var timeout int
+    flag.IntVar(&timeout, "timeout", 1000000, "[timeout (ms)]")
+    flag.Parse()
 
     /**
      Print arguments
@@ -88,7 +54,7 @@ func main() {
     fmt.Printf("Domain: %v\n", domain)
     fmt.Printf("Repeat count: %v\n", cntRepeat)
 
-    if timeout > 0 {
+    if timeout > 1000000 {
         fmt.Printf("Timeout: %v\n", timeout)
     }
     fmt.Println("")
@@ -140,7 +106,11 @@ func main() {
 
 
     stat.FullTime = time.Since(startTime)
-    stat.MiddleTime = len / time.Duration(cntRepeat - stat.CntBad)
+    if cntRepeat - stat.CntBad != 0 {
+        stat.MiddleTime = len / time.Duration(cntRepeat - stat.CntBad)
+    } else {
+        stat.MiddleTime = 0
+    }
 
 
     /**
