@@ -2,19 +2,24 @@ package main
 
 import (
     "fmt"
-    "strings"
     "os"
     "strconv"
     "time"
     "net/http"
 )
 
-type RetData struct { // Result of Get 
+/**
+ @struct RetData Contained result of request
+ */
+type RetData struct {
     RetCode int
     Time time.Duration
 }
 
-type Statistics struct { // Result of Test
+/**
+ @struct Statistics Contained result of test
+ */
+type Statistics struct {
     CntBad int
     CntTimeout int
     MinTime time.Duration
@@ -23,47 +28,49 @@ type Statistics struct { // Result of Test
     FullTime time.Duration
 }
 
+/**
+ @brief Main function of checker
+ @detailed This function parsed initial parameters, created requests, check result and
+ calculated statistics
+ */
 func main() {
-    //argsP := os.Args
-
-    stat := Statistics{0,0,0,0,0,0}
+    stat := Statistics{}
     startTime := time.Now()
 
-    args := os.Args[1:]  // Get argument list
-    cntArgs := len(args) // Count of arguments
+    args := os.Args[1:]  //!< Get argument list
+    cntArgs := len(args) //!< Count of arguments
     timeout := 0
 
-	if cntArgs < 2 { // Obligatory arguments not present
-        if cntArgs == 1 { // Maybe help
-            str := args[0]
-            if strings.EqualFold(str, "-h") || strings.EqualFold(str, "-help") {
-                fmt.Println("Help:")
-                fmt.Println("    checker <domain name> <count of checks> [timeout (ms)]")
-                fmt.Println("")
-                os.Exit(0)        
-            }
-        }
-        // It is error of arguments
+	if cntArgs < 2 { 
+        /** 
+         Obligatory arguments not present
+         It is error of arguments
+         */
 		fmt.Println("Error: bad arguments")
 		fmt.Println("    checker <domain name> <count of checks> [timeout (ms)]")
 		fmt.Println("")
 		os.Exit(100)
-	} else if cntArgs >= 3 { // Maybe not obligatory argument present
+	} else if cntArgs >= 3 { 
+        /**
+         Check not obligatory argument
+         */
         strTimeout := args[2]
         num, err := strconv.Atoi(strTimeout)
 
-        if err == nil { // Ok not obligatory argument
+        if err == nil {
             timeout = num
-        } else { // Bad not obligatory argument
+        } else {
             fmt.Println("Warning: bad [timeout (ms)] argument. Ignored.")
             fmt.Println("")
         }
 	}
 
-    strCntRepeat := args[1] // Count repeat argument
+    strCntRepeat := args[1] //!< Count repeat argument
     cntRepeat, err := strconv.Atoi(strCntRepeat)
-
-    if err != nil { // Bad count repeat argument
+    /**
+     Check count repeat argument
+     */
+    if err != nil { 
 		fmt.Println("Error: bad <count of checks> argument")
 		fmt.Println("    checker <domain name> <count of checks> [timeout]")
 		fmt.Println("")
@@ -71,9 +78,11 @@ func main() {
     }
 
 
-    domain := args[0] // Url argument
+    domain := args[0] //!< Url argument
 
-    // Print arguments
+    /**
+     Print arguments
+     */
     fmt.Println("")
     fmt.Println("Check parameters:")
     fmt.Printf("Domain: %v\n", domain)
@@ -86,21 +95,26 @@ func main() {
 
 
 
-
-    // Start of test
+    /**
+     Start of test
+     */
     c := make(chan RetData)
+    client := http.Client{} 
 
     for i := 0; i < cntRepeat; i++ {
-        go checkResource(domain, c)
+        go checkResource(domain, c, &client)
     }
 
 
 
 
-    // Result preparing
+    /**
+     Result preparing
+     */
     checkTime := time.Second * time.Duration(timeout) / time.Duration(1000)
-//    for l := range c {
+    len := time.Duration(0)
     l := RetData{}
+
     for i := 0; i < cntRepeat; i++ {
         l = <- c
 
@@ -120,16 +134,18 @@ func main() {
         if l.Time > stat.MaxTime {
             stat.MaxTime = l.Time
         }
+
+        len += l.Time
     }
 
 
-    finishTime := time.Now()
-    stat.FullTime = finishTime.Sub(startTime)
-
-    stat.MiddleTime = stat.FullTime / time.Duration(cntRepeat)
+    stat.FullTime = time.Since(startTime)
+    stat.MiddleTime = len / time.Duration(cntRepeat - stat.CntBad)
 
 
-    // Print result
+    /**
+     Print result
+     */
     fmt.Println("")
     fmt.Println("Result statistic:")
     fmt.Printf("CntBad: %v\n", stat.CntBad)
@@ -142,24 +158,26 @@ func main() {
     fmt.Println("")
 }
 
-
-func checkResource(url string, channel chan RetData) {
-    ret := RetData{0, 0}
-
+/**
+ @brief Check availability of resource
+ @param url Domain name
+ @param channel Channel for exchange with main
+ @param cl HTTP client
+*/
+func checkResource(url string, channel chan RetData, cl *http.Client) {
+    ret := RetData{}
 //fmt.Println(" -- check 1")
     start := time.Now()
-    client := http.Client{} 
 
-    resp, err := client.Get(url) 
+    resp, err := cl.Get(url) 
     if err != nil { 
-        ret.RetCode = 404
+        ret.RetCode = 500
     } else {
-        defer resp.Body.Close() 
         ret.RetCode = resp.StatusCode
+        defer resp.Body.Close() 
     }
 
-    finish := time.Now()
-    ret.Time = finish.Sub(start)
+    ret.Time = time.Since(start)
 //fmt.Printf(" -- retCode %v\n", ret.RetCode)
 
     channel <- ret
