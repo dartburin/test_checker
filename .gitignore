@@ -1,6 +1,7 @@
 # code file
 checker
 go.mod
+Makefile
 
 *.txt
 
