@@ -51,12 +51,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	//  Start gorutines with http requests
 	c := make(chan RetData)
 	client := http.Client{
 		Timeout: time.Second * time.Duration(timeout) / time.Duration(1000),
 	}
 
+	//  Start gorutines with http requests
 	var i uint
 	for i = 0; i < cntRepeat; i++ {
 		go checkResource(domain, c, &client)
