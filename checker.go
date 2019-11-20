@@ -9,15 +9,18 @@ import (
 	"time"
 )
 
-type RetData struct { // Result of request
-	bad     bool
-	timeOut bool
-	Time    time.Duration
+// Struct for result of request
+type RetData struct {
+	bad        bool
+	timeOut    bool
+	startTime  time.Time
+	finishTime time.Time
 }
 
-type Statistics struct { // Result of test
-	CntBad     int
-	CntTimeout int
+// Struct for result of test
+type Statistics struct {
+	CntBad     uint
+	CntTimeout uint
 	MinTime    time.Duration
 	MaxTime    time.Duration
 	MiddleTime time.Duration
@@ -30,12 +33,8 @@ func (s Statistics) String() string {
 		s.CntBad, s.CntTimeout, s.MinTime, s.MiddleTime, s.MaxTime, s.FullTime)
 }
 
-// Main function parsed initial parameters, created requests, check result and
-// calculated statistics
+// Main function parsed initial parameters, created requests and check result
 func main() {
-	stat := Statistics{}
-	startTime := time.Now()
-
 	domain := flag.String("domain", "", "a domain name")
 
 	var cntRepeat uint
@@ -57,49 +56,25 @@ func main() {
 	}
 
 	//  Start gorutines with http requests
-	var i uint
-	for i = 0; i < cntRepeat; i++ {
+	for i := uint(0); i < cntRepeat; i++ {
 		go checkResource(domain, c, &client)
 	}
 
-	//  Statistic counting
-	len := time.Duration(0)
-	l := RetData{}
+	stat := Statistics{}
+	countingStat(&stat, cntRepeat, c)
 
-	for i = 0; i < cntRepeat; i++ {
-		l = <-c
-
-		if l.bad {
-			stat.CntBad++
-		}
-
-		if l.timeOut {
-			stat.CntTimeout++
-		}
-
-		if l.Time < stat.MinTime || stat.MinTime == 0 {
-			stat.MinTime = l.Time
-		}
-
-		if l.Time > stat.MaxTime {
-			stat.MaxTime = l.Time
-		}
-
-		len += l.Time
-	}
-
-	stat.FullTime = time.Since(startTime)
-	stat.MiddleTime = len / time.Duration(cntRepeat)
-
-	fmt.Println(stat) // Print result of request test
+	// Print result of request test
+	fmt.Println(stat)
 }
 
 // Check availability of resource
 func checkResource(url *string, channel chan RetData, cl *http.Client) {
 	ret := RetData{}
-	start := time.Now()
 
+	ret.startTime = time.Now()
 	resp, err := cl.Get(*url)
+	ret.finishTime = time.Now()
+
 	if err != nil {
 		ret.bad = true
 		if terr, ok := err.(net.Error); ok && terr.Timeout() {
@@ -112,6 +87,52 @@ func checkResource(url *string, channel chan RetData, cl *http.Client) {
 		defer resp.Body.Close()
 	}
 
-	ret.Time = time.Since(start)
 	channel <- ret
+}
+
+//  Statistic counting
+func countingStat(stat *Statistics, cnt uint, channel chan RetData) {
+
+	len := time.Duration(0)
+	l := RetData{}
+	startTime := time.Now()
+	finishTime := time.Time{}
+
+	for i := uint(0); i < cnt; i++ {
+		l = <-channel
+
+		delta := l.finishTime.Sub(l.startTime)
+
+		// Calc counts of not ok requests
+		if l.bad {
+			stat.CntBad++
+		}
+
+		if l.timeOut {
+			stat.CntTimeout++
+		}
+
+		// Check times of a single request
+		if delta < stat.MinTime || stat.MinTime == 0 {
+			stat.MinTime = delta
+		}
+
+		if delta > stat.MaxTime {
+			stat.MaxTime = delta
+		}
+
+		// Check times of all requests
+		if l.startTime.Before(startTime) {
+			startTime = l.startTime
+		}
+
+		if l.finishTime.After(finishTime) {
+			finishTime = l.finishTime
+		}
+
+		len += delta
+	}
+
+	stat.FullTime = finishTime.Sub(startTime)
+	stat.MiddleTime = len / time.Duration(cnt)
 }
